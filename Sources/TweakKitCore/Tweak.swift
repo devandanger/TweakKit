@@ -29,6 +29,10 @@ extension Bool: TweakValue {
     }
 }
 
+extension Int: TweakValue {}
+
+extension Double: TweakValue {}
+
 public protocol TweakNumeric: Comparable {
     var asDouble: Double { get }
     static func fromDouble(_ value: Double) -> Self?
