@@ -8,6 +8,25 @@ public final class TweakKitServer: ServerWebSocketDelegate {
         case lan
     }
 
+    public enum StartPolicy {
+        case debugOnly
+        case allowRelease
+    }
+
+    public enum ServerError: Error, CustomStringConvertible {
+        case debugOnly
+        case unauthorized
+
+        public var description: String {
+            switch self {
+            case .debugOnly:
+                return "TweakKitServer is disabled outside DEBUG by default."
+            case .unauthorized:
+                return "Unauthorized"
+            }
+        }
+    }
+
     private struct Session {
         weak var socket: WebSocket?
         var isWatching: Bool
@@ -26,6 +45,9 @@ public final class TweakKitServer: ServerWebSocketDelegate {
     private let queue = DispatchQueue(label: "TweakKit.Server.state")
     private var sessions: [ObjectIdentifier: Session] = [:]
     private var routesConfigured = false
+    private var activeNetworkMode: NetworkMode = .localhostOnly
+
+    public private(set) var token: String?
 
     public init(registry: TweakRegistry = .shared) {
         self.server = Server()
@@ -41,14 +63,28 @@ public final class TweakKitServer: ServerWebSocketDelegate {
         server.isRunning
     }
 
-    public func start(port: Int = 8080, networkMode: NetworkMode = .localhostOnly) throws {
+    public func start(
+        port: Int = 8080,
+        networkMode: NetworkMode = .localhostOnly,
+        policy: StartPolicy = .debugOnly
+    ) throws {
+#if !DEBUG
+        if policy == .debugOnly {
+            throw ServerError.debugOnly
+        }
+#endif
         if !routesConfigured {
             configureRoutes()
             routesConfigured = true
         }
+        activeNetworkMode = networkMode
+        token = UUID().uuidString
         let interface: String? = networkMode == .localhostOnly ? "127.0.0.1" : nil
         try server.start(port: port, interface: interface)
         installRegistryObserverIfNeeded()
+        if let url = accessURL {
+            print("TweakKitServer running at \(url.absoluteString)")
+        }
     }
 
     public func stop(immediately: Bool = false) {
@@ -57,10 +93,14 @@ public final class TweakKitServer: ServerWebSocketDelegate {
         queue.sync {
             sessions.removeAll()
         }
+        token = nil
     }
 
     private func configureRoutes() {
-        server.route(.GET, "/") { _ in
+        server.route(.GET, "/") { request in
+            if !self.isAuthorized(request: request) {
+                return HTTPResponse(.unauthorized, content: "Unauthorized")
+            }
             var headers = HTTPHeaders.empty
             headers.contentType = "text/html; charset=utf-8"
             return HTTPResponse(.ok, headers: headers, content: TerminalHTML.content)
@@ -72,7 +112,10 @@ public final class TweakKitServer: ServerWebSocketDelegate {
             return HTTPResponse(.ok, headers: headers, content: "OK")
         }
 
-        server.route(.GET, "/api/tweaks") { _ in
+        server.route(.GET, "/api/tweaks") { request in
+            if !self.isAuthorized(request: request) {
+                return HTTPResponse(.unauthorized, content: "Unauthorized")
+            }
             let payload = self.registry.list().map { tweak -> [String: Any] in
                 var entry: [String: Any] = [
                     "key": tweak.key,
@@ -144,6 +187,11 @@ public final class TweakKitServer: ServerWebSocketDelegate {
     }
 
     public func server(_ server: Server, webSocketDidConnect webSocket: WebSocket, handshake: HTTPRequest) {
+        guard isAuthorized(request: handshake) else {
+            webSocket.send(text: "Unauthorized. Provide ?token=... in the URL.")
+            webSocket.close(immediately: true)
+            return
+        }
         let id = ObjectIdentifier(webSocket)
         queue.sync {
             sessions[id] = Session(socket: webSocket, isWatching: false, watchKey: nil)
@@ -182,6 +230,23 @@ public final class TweakKitServer: ServerWebSocketDelegate {
             "Type 'help' for commands.",
             ""
         ]
+    }
+
+    private var accessURL: URL? {
+        guard server.isRunning, let token else {
+            return nil
+        }
+        let host = activeNetworkMode == .localhostOnly ? "127.0.0.1" : "0.0.0.0"
+        let urlString = "http://\(host):\(server.port)/?token=\(token)"
+        return URL(string: urlString)
+    }
+
+    private func isAuthorized(request: HTTPRequest) -> Bool {
+        guard let token else {
+            return true
+        }
+        let tokenParam = request.uri.queryItems?.first(where: { $0.name == "token" })?.value
+        return tokenParam == token
     }
 
     private func handle(commandLine: String, from socket: WebSocket) -> [String] {
@@ -518,7 +583,12 @@ private enum TerminalHTML {
           const output = document.getElementById('output');
           const input = document.getElementById('input');
           const scheme = location.protocol === 'https:' ? 'wss' : 'ws';
-          const socket = new WebSocket(`${scheme}://${location.host}/ws`);
+          const params = new URLSearchParams(location.search);
+          const token = params.get('token');
+          if (!token) {
+            writeLine('Missing token. Append ?token=... to the URL.');
+          }
+          const socket = new WebSocket(`${scheme}://${location.host}/ws?token=${token || ''}`);
 
           const writeLine = (text) => {
             const line = document.createElement('div');
