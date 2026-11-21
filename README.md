@@ -9,7 +9,7 @@ Swift library for runtime tweaking of app values through a web-based terminal in
 Add the package in Swift Package Manager:
 
 - URL: `https://github.com/devandanger/TweakKit.git`
-- Products: `TweakKitCore`, `TweakKitServer`
+- Products: `TweakKitCore`, `TweakKitServer`, `TweakKitMCP`
 
 ## Core usage
 
@@ -63,6 +63,35 @@ The server prints a URL with a `token` query parameter. Use that URL in your bro
 - `last`
 - `history [n]`
 - `watch [key]`
+
+## MCP usage
+
+`TweakKitMCP` embeds an [MCP](https://modelcontextprotocol.io) server in your app, so AI agents such as Claude Code can inspect and change tweaks in the running app directly.
+
+```swift
+import TweakKitMCP
+
+let mcp = TweakKitMCPServer()
+try mcp.start() // localhost:8090, DEBUG builds only
+```
+
+On start it prints a ready-to-paste command:
+
+```bash
+claude mcp add --transport http tweakkit http://127.0.0.1:8090/mcp --header "Authorization: Bearer <token>"
+```
+
+The token is random on each launch by default. Pass a stable one so you only register once:
+
+```swift
+try mcp.start(token: ProcessInfo.processInfo.environment["TWEAKKIT_MCP_TOKEN"])
+```
+
+For a physical device, use `networkMode: .lan`; the printed URL uses the device's Wi-Fi address.
+
+Tools: `list_tweaks`, `get_tweak`, `set_tweak`, `reset_tweak`, `reset_all_tweaks`, `get_tweak_history`. Changes made through MCP are recorded with source `mcp`.
+
+It can run alongside `TweakKitServer` (port 8080). On iOS, sockets stop working when the app is suspended, so restart the server when the app returns to the foreground if needed.
 
 ## SwiftUI integration
 

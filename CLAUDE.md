@@ -8,11 +8,13 @@ TweakKit is a Swift library for iOS/macOS that enables runtime tweaking of app v
 
 ## Architecture
 
-The library consists of three modules:
+The library consists of these modules:
 
 - **TweakKitCore**: The foundation - typed `Tweak<T>` values that self-register into a global O(1) registry, in-memory override storage, change events, and history tracking (last tweak + ring buffer)
 - **TweakKitServer**: Embedded HTTP server serving a terminal-style web UI, WebSocket endpoint for command I/O (`list`, `get`, `set`, `reset`, `last`, `history`, `watch`)
-- **TweakKitSwiftUI**: `@TweakValue` property wrapper that triggers SwiftUI updates on tweak changes
+- **TweakKitMCP**: Embedded MCP server (Streamable HTTP, `POST /mcp`, JSON responses, bearer-token auth) exposing tweaks as tools for AI agents
+- **TweakKitNetworking**: Internal (non-product) target with shared helpers such as LAN IP lookup
+- **TweakKitSwiftUI** (planned): `@TweakValue` property wrapper that triggers SwiftUI updates on tweak changes
 
 ## Key Concepts
 

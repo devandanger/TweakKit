@@ -15,6 +15,10 @@ let package = Package(
         .library(
             name: "TweakKitServer",
             targets: ["TweakKitServer"]
+        ),
+        .library(
+            name: "TweakKitMCP",
+            targets: ["TweakKitMCP"]
         )
     ],
     dependencies: [
@@ -29,9 +33,23 @@ let package = Package(
             name: "TweakKitServer",
             dependencies: [
                 "TweakKitCore",
+                "TweakKitNetworking",
                 .product(name: "Telegraph", package: "Telegraph")
             ],
             path: "Sources/TweakKitServer"
+        ),
+        .target(
+            name: "TweakKitMCP",
+            dependencies: [
+                "TweakKitCore",
+                "TweakKitNetworking",
+                .product(name: "Telegraph", package: "Telegraph")
+            ],
+            path: "Sources/TweakKitMCP"
+        ),
+        .target(
+            name: "TweakKitNetworking",
+            path: "Sources/TweakKitNetworking"
         ),
         .testTarget(
             name: "TweakKitCoreTests",
@@ -42,6 +60,11 @@ let package = Package(
             name: "TweakKitServerTests",
             dependencies: ["TweakKitServer"],
             path: "Tests/TweakKitServerTests"
+        ),
+        .testTarget(
+            name: "TweakKitMCPTests",
+            dependencies: ["TweakKitMCP"],
+            path: "Tests/TweakKitMCPTests"
         )
     ]
 )

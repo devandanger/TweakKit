@@ -1,6 +1,7 @@
 import Foundation
 import Telegraph
 import TweakKitCore
+import TweakKitNetworking
 
 public final class TweakKitServer: ServerWebSocketDelegate {
     public enum NetworkMode {
@@ -236,7 +237,13 @@ public final class TweakKitServer: ServerWebSocketDelegate {
         guard server.isRunning, let token else {
             return nil
         }
-        let host = activeNetworkMode == .localhostOnly ? "127.0.0.1" : "0.0.0.0"
+        let host: String
+        switch activeNetworkMode {
+        case .localhostOnly:
+            host = "127.0.0.1"
+        case .lan:
+            host = NetworkAddress.lanIPv4Address() ?? "127.0.0.1"
+        }
         let urlString = "http://\(host):\(server.port)/?token=\(token)"
         return URL(string: urlString)
     }
@@ -583,12 +590,6 @@ private enum TerminalHTML {
           const output = document.getElementById('output');
           const input = document.getElementById('input');
           const scheme = location.protocol === 'https:' ? 'wss' : 'ws';
-          const params = new URLSearchParams(location.search);
-          const token = params.get('token');
-          if (!token) {
-            writeLine('Missing token. Append ?token=... to the URL.');
-          }
-          const socket = new WebSocket(`${scheme}://${location.host}/ws?token=${token || ''}`);
 
           const writeLine = (text) => {
             const line = document.createElement('div');
@@ -599,8 +600,15 @@ private enum TerminalHTML {
           };
 
           const writeBlock = (text) => {
-            text.split('\n').forEach((line) => writeLine(line));
+            text.split('\\n').forEach((line) => writeLine(line));
           };
+
+          const params = new URLSearchParams(location.search);
+          const token = params.get('token');
+          if (!token) {
+            writeLine('Missing token. Append ?token=... to the URL.');
+          }
+          const socket = new WebSocket(`${scheme}://${location.host}/ws?token=${encodeURIComponent(token || '')}`);
 
           socket.addEventListener('open', () => {
             writeLine('Connected to TweakKit server.');

@@ -6,6 +6,7 @@ public enum TweakEventSource: String, Sendable {
     case web
     case ui
     case code
+    case mcp
 }
 
 public struct TweakEvent: Sendable {
